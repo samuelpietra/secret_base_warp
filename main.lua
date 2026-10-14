@@ -32,17 +32,40 @@ return function(mod)
     return t ~= nil and type(t[key]) == "function"
   end
 
-  -- The row borrows Teleport's animation, so it borrows Teleport's rules:
-  -- FieldMoves.teleportFromMenu refuses wherever isOutdoors is false.  Fails
-  -- closed, because a question that cannot be answered is not a yes.
-  local function teleportAllowedHere(Runtime)
-    local FieldMoves = engine("src.core.game3.field_moves")
-    local Map = engine("src.core.game3.map")
-    local game = Runtime and Runtime._game
-    local maps = game and game.data and game.data.maps
-    local def = Map and maps and maps[Map.current]
-    if not (def and callable(FieldMoves, "isOutdoors")) then return false end
-    return FieldMoves.isOutdoors(tonumber(def.mapType)) == true
+  -- The warp is a round trip -- SB.enter stores the departure point and the
+  -- base door walks it back -- so the question is not "may the player leave
+  -- this map" but "is the game in the middle of something".
+  local function midSomething(sess)
+    local Field = engine("src.core.game3.field")
+    if callable(Field, "isLocked") and Field.isLocked() then return true end
+
+    -- Warp.scripted sets Warp._busy without ever checking it.
+    local Warp = engine("src.core.game3.warp")
+    if callable(Warp, "isBusy") and Warp.isBusy() then return true end
+
+    -- Mr. Briney's boat and the S.S. Tidal: scripted start to finish, and
+    -- applyInitialAvatar treats the state as a special case of its own.
+    local Rse = engine("src.core.game3.rse.init")
+    if callable(Rse, "flag") and Rse.flag("FLAG_SYS_CRUISE_MODE", sess) then
+      return true
+    end
+
+    -- Frontier facilities and Battle Tents cut the player off from the PC on
+    -- purpose, and a Secret Base has one.  challengeStatus is 0 between runs,
+    -- so the lobbies and the surrounding town stay usable.
+    local frontier = sess.frontier
+    if type(frontier) == "table"
+        and (tonumber(frontier.challengeStatus) or 0) ~= 0 then
+      return true
+    end
+
+    local Hill = engine("src.core.game3.rse.trainer_hill")
+    if callable(Hill, "inChallenge") then
+      local ok, running = pcall(Hill.inChallenge, sess)
+      if ok and running then return true end
+    end
+
+    return false
   end
 
   -- Everything the warp needs, or nil when it cannot run right now.
@@ -54,20 +77,20 @@ return function(mod)
     local sess = Runtime.getSession()
     if type(sess) ~= "table" then return nil end
 
-    -- Warp.scripted sets Warp._busy without ever checking it, so a warp
-    -- already in flight has to be ruled out here instead.
-    local Warp = engine("src.core.game3.warp")
-    if callable(Warp, "isBusy") and Warp.isBusy() then return nil end
-
     local okBase, hasBase = pcall(SB.playerHasBase, sess)
     if not (okBase and hasBase) then return nil end
 
+    -- Entering from inside a base overwrites session.dynamicWarp, the single
+    -- slot holding the first base's way out, stranding the player indoors.
     local okMap, inside = pcall(SB.curMapIsSecretBase, sess)
     if not okMap or inside then return nil end
 
-    if not teleportAllowedHere(Runtime) then return nil end
+    if midSomething(sess) then return nil end
 
-    return { SB = SB, sess = sess, Runtime = Runtime, Warp = Warp }
+    return {
+      SB = SB, sess = sess, Runtime = Runtime,
+      Warp = engine("src.core.game3.warp"),
+    }
   end
 
   local function teleportKind(Warp)
