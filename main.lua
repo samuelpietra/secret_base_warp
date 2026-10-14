@@ -124,28 +124,46 @@ return function(mod)
     return TELEPORT_KIND
   end
 
-  local function enter(ctx)
+  -- The vanilla entry runs a script, not SB.enter: the native wraps the warp
+  -- in waitWarp and the script resumes at waitstate to finish setting the room
+  -- up.  Calling SB.enter by hand got the warp and skipped the rest, which is
+  -- what left the base PC unpainted but still solid.
+  local ENTER_SCRIPT = "SecretBase_EventScript_Enter"
+
+  -- The script warps some frames later, so the kind swap cannot be undone on
+  -- the next line the way a direct call allowed.  It disarms itself when the
+  -- warp fires, and only rewrites the kind for a secret-base destination, so a
+  -- script that never warps leaves nothing harmful behind.
+  local function armTeleportKind(ctx)
     local kind = teleportKind(ctx.Warp)
-    if not (kind and callable(ctx.Warp, "scripted")) then
-      local ok, entered = pcall(ctx.SB.enter, ctx.sess)
-      return ok and entered ~= false
+    if not (kind and callable(ctx.Warp, "scripted")) then return function() end end
+
+    local Warp = ctx.Warp
+    local original = Warp.scripted
+    local function disarm()
+      if Warp.scripted ~= original then Warp.scripted = original end
     end
 
-    -- rse.secret_base resolves Warp.scripted on the table at call time, so
-    -- swapping the field reaches it.  Restored in the same tick either way,
-    -- and SB.enter hardcodes the plain "warp" kind, hence the swap.
-    local original = ctx.Warp.scripted
-    local swapped = false
-    ctx.Warp.scripted = function(m, g, k, ...)
-      if not swapped then
-        swapped = true
-        k = kind
-      end
-      return original(m, g, k, ...)
+    Warp.scripted = function(m, g, k, destMap, ...)
+      disarm()
+      local ok, isBase = pcall(ctx.SB.curMapIsSecretBase, ctx.sess, destMap)
+      if ok and isBase then k = kind end
+      return original(m, g, k, destMap, ...)
+    end
+    return disarm
+  end
+
+  local function enter(ctx)
+    local disarm = armTeleportKind(ctx)
+
+    if callable(ctx.SB, "startScript") then
+      local ok, started = pcall(ctx.SB.startScript, ENTER_SCRIPT)
+      if ok and started then return true end
     end
 
+    -- Fallback only: this is the path that leaves the PC unpainted.
     local ok, entered = pcall(ctx.SB.enter, ctx.sess)
-    ctx.Warp.scripted = original
+    disarm()
     return ok and entered ~= false
   end
 
