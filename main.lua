@@ -149,6 +149,48 @@ return function(mod)
     return ok and entered ~= false
   end
 
+  -- The return trip is the base door, taken whenever the player feels like it
+  -- and possibly after a save, so the bike has to outlive this session rather
+  -- than sit in a local.  map.lua recomputes keepBike from the destination and
+  -- never writes Player.biking on the way back, so nothing else remounts.
+  local PENDING_BIKE = "pendingBike"
+
+  local function rememberBike(sess)
+    local Player = engine("src.core.game3.player")
+    local riding = Player ~= nil and Player.biking == true
+    mod.save:set(PENDING_BIKE, riding and sess.map or false)
+  end
+
+  local function forgetBike()
+    mod.save:set(PENDING_BIKE, false)
+  end
+
+  local function restoreBike(mapId)
+    local pending = mod.save:get(PENDING_BIKE, false)
+    if type(pending) ~= "string" or type(mapId) ~= "string" then return end
+
+    -- Arriving in the base is the first half of the trip; keep waiting.
+    local Runtime = engine("src.core.game3.runtime")
+    local SB = engine("src.core.game3.rse.secret_base")
+    local sess = callable(Runtime, "getSession") and Runtime.getSession() or nil
+    if SB and type(sess) == "table" then
+      local ok, inside = pcall(SB.curMapIsSecretBase, sess, mapId)
+      if ok and inside then return end
+    end
+
+    -- Anywhere else settles it: either this is the way back, or the player
+    -- left the base by some other route and the record is stale.
+    forgetBike()
+    if mapId ~= pending then return end
+
+    local Player = engine("src.core.game3.player")
+    if not Player or Player.surfing or Player.underwater then return end
+    Player.biking = true
+
+    local Audio = engine("src.core.game3.audio")
+    if callable(Audio, "bikeMusic") then pcall(Audio.bikeMusic, true, true) end
+  end
+
   local function goToBase()
     local ctx = ready()
     if not ctx then return end
@@ -167,14 +209,20 @@ return function(mod)
       local Player = engine("src.core.game3.player")
       local previous = Player and Player.facing
       if Player then Player.facing = "up" end
-      if not enter(ctx) and Player and previous then
-        Player.facing = previous
+      rememberBike(ctx.sess)
+      if not enter(ctx) then
+        forgetBike()
+        if Player and previous then Player.facing = previous end
       end
     end
 
     if callable(ctx.Runtime, "defer") and ctx.Runtime.defer(warp) then return end
     warp()
   end
+
+  mod.events:on("map.entered", function(ev)
+    restoreBike(ev and ev.mapId)
+  end)
 
   mod.hooks:wrap("ui.start_menu.items", function(next, game, items)
     local out = next(game, items)
