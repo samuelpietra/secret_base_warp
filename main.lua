@@ -1,67 +1,75 @@
 -- Secret Base Warp (id: secret_base_warp)
 --
--- Adds one Start menu row that takes the player to their own Secret Base.
+-- Adds a Start menu row that takes the player into their own Secret Base.
+-- Walking back out the door returns them to where they left from, which is
+-- vanilla: SB.enter stores the departure point in session.dynamicWarp, and
+-- SB.warpOut reads it.
 --
--- The return trip is vanilla and free: src/core/game3/rse/secret_base.lua's
--- SB.enter records the current position in session.dynamicWarp before warping,
--- which is what SB.warpOut reads when the player walks back out the door.
---
--- The transition is Emerald's own teleport warp (rse_teleport_tile: warp-in
--- sound, fade, spin on arrival).  SB.enter hardcodes the plain "warp" kind, so
--- the kind is swapped for the duration of that one call rather than copying
--- SB.enter's body -- its bookkeeping (numTimesEntered, dynamicWarp, entrance
--- lookup) leans on locals this mod cannot reach, and a copy would drift.
---
--- Needs the "engine_internals" permission: rse.secret_base and runtime are not
--- on the Gen3 mod facade list, so they are reached through require directly.
+-- Needs "engine_internals": runtime, rse.secret_base, warp and player are not
+-- on the Gen3 mod facade list, so they are reached through require.
 
 return function(mod)
-  -- Engine modules are optional at load time: a version that moved or renamed
-  -- one must disable the row, never break the Start menu for everything else.
-  local function engine(name)
-    local ok, m = pcall(require, name)
-    if not ok or type(m) ~= "table" then return nil end
-    return m
-  end
-
-  local function parts()
-    local Runtime = engine("src.core.game3.runtime")
-    local SB = engine("src.core.game3.rse.secret_base")
-    if not (Runtime and SB) then return nil end
-    if type(Runtime.getSession) ~= "function" then return nil end
-    local sess = Runtime.getSession()
-    if type(sess) ~= "table" then return nil end
-    return Runtime, SB, sess
-  end
-
-  -- The row only appears when it would actually work, so there is no such
-  -- thing as selecting it and nothing happening.
-  local function available()
-    local _, SB, sess = parts()
-    if not SB then return false end
-    local okHas, has = pcall(SB.playerHasBase, sess)
-    if not okHas or not has then return false end
-    local okIn, inside = pcall(SB.curMapIsSecretBase, sess)
-    if not okIn or inside then return false end
-    return true
-  end
-
-  -- Emerald's teleport-tile warp spins the player in on arrival but not out on
-  -- departure, and FireRed's "warpteleport" spins both ways but carries no
-  -- departure sound.  The spec fields are independent flags and the kinds table
-  -- is only ever indexed by key, never enumerated, so the honest fix is to
-  -- register one row that is both rather than settle for half of each.
   local TELEPORT_KIND = "secret_base_warp"
+
+  -- Emerald's rse_teleport_tile has the departure sound but no spinOut, and
+  -- FireRed's warpteleport has both spins but no sound.  SCRIPTED_KINDS is
+  -- only ever indexed by key, never enumerated, so adding a row is safe.
   local TELEPORT_SPEC = {
-    se = "SE_WARP_IN",   -- departure
-    spinOut = true,      -- departure, the part rse_teleport_tile lacks
+    se = "SE_WARP_IN",
+    spinOut = true,
     music = true,
     fadeOut = true,
-    spinIn = true,       -- arrival; the engine pairs SE_WARP_OUT with it
+    spinIn = true, -- the engine plays SE_WARP_OUT as part of this
   }
 
-  -- Registered on use, not at load, so a kinds table rebuilt by a reload heals
-  -- itself on the next trip instead of silently dropping back to a plain fade.
+  local function engine(name)
+    local ok, module = pcall(require, name)
+    if not ok or type(module) ~= "table" then return nil end
+    return module
+  end
+
+  local function callable(t, key)
+    return t ~= nil and type(t[key]) == "function"
+  end
+
+  -- The row borrows Teleport's animation, so it borrows Teleport's rules:
+  -- FieldMoves.teleportFromMenu refuses wherever isOutdoors is false.  Fails
+  -- closed, because a question that cannot be answered is not a yes.
+  local function teleportAllowedHere(Runtime)
+    local FieldMoves = engine("src.core.game3.field_moves")
+    local Map = engine("src.core.game3.map")
+    local game = Runtime and Runtime._game
+    local maps = game and game.data and game.data.maps
+    local def = Map and maps and maps[Map.current]
+    if not (def and callable(FieldMoves, "isOutdoors")) then return false end
+    return FieldMoves.isOutdoors(tonumber(def.mapType)) == true
+  end
+
+  -- Everything the warp needs, or nil when it cannot run right now.
+  local function ready()
+    local Runtime = engine("src.core.game3.runtime")
+    local SB = engine("src.core.game3.rse.secret_base")
+    if not (SB and callable(Runtime, "getSession")) then return nil end
+
+    local sess = Runtime.getSession()
+    if type(sess) ~= "table" then return nil end
+
+    -- Warp.scripted sets Warp._busy without ever checking it, so a warp
+    -- already in flight has to be ruled out here instead.
+    local Warp = engine("src.core.game3.warp")
+    if callable(Warp, "isBusy") and Warp.isBusy() then return nil end
+
+    local okBase, hasBase = pcall(SB.playerHasBase, sess)
+    if not (okBase and hasBase) then return nil end
+
+    local okMap, inside = pcall(SB.curMapIsSecretBase, sess)
+    if not okMap or inside then return nil end
+
+    if not teleportAllowedHere(Runtime) then return nil end
+
+    return { SB = SB, sess = sess, Runtime = Runtime, Warp = Warp }
+  end
+
   local function teleportKind(Warp)
     local kinds = Warp and Warp.SCRIPTED_KINDS
     if type(kinds) ~= "table" then return nil end
@@ -71,72 +79,64 @@ return function(mod)
     return TELEPORT_KIND
   end
 
-  -- Warp.scripted is looked up on the table at call time by rse.secret_base,
-  -- so replacing the field is enough, and it is put back in the same tick --
-  -- including when SB.enter throws.  Without the kind, the plain fade is a
-  -- perfectly good fallback, so this degrades instead of failing.
-  local function enterWithTeleport(SB, sess)
-    local Warp = engine("src.core.game3.warp")
-    local kind = teleportKind(Warp)
-    if not (kind and type(Warp.scripted) == "function") then
-      return SB.enter(sess)
+  local function enter(ctx)
+    local kind = teleportKind(ctx.Warp)
+    if not (kind and callable(ctx.Warp, "scripted")) then
+      local ok, entered = pcall(ctx.SB.enter, ctx.sess)
+      return ok and entered ~= false
     end
-    local original = Warp.scripted
+
+    -- rse.secret_base resolves Warp.scripted on the table at call time, so
+    -- swapping the field reaches it.  Restored in the same tick either way,
+    -- and SB.enter hardcodes the plain "warp" kind, hence the swap.
+    local original = ctx.Warp.scripted
     local swapped = false
-    Warp.scripted = function(m, g, k, ...)
+    ctx.Warp.scripted = function(m, g, k, ...)
       if not swapped then
         swapped = true
         k = kind
       end
       return original(m, g, k, ...)
     end
-    local ok = pcall(SB.enter, sess)
-    Warp.scripted = original
-    return ok
+
+    local ok, entered = pcall(ctx.SB.enter, ctx.sess)
+    ctx.Warp.scripted = original
+    return ok and entered ~= false
   end
 
   local function goToBase()
-    local Runtime, SB, sess = parts()
-    if not SB or not available() then return end
+    local ctx = ready()
+    if not ctx then return end
 
-    -- trySetCur sets both SB._curId and VAR_CURRENT_SECRET_BASE, which is what
-    -- SB.enter reads to resolve the entrance.  Index 0 is the player's base.
-    local myId = SB.base(sess, 0).secretBaseId
-    SB.trySetCur(myId, sess)
+    -- Index 0 is the player's own base.  trySetCur sets SB._curId and
+    -- VAR_CURRENT_SECRET_BASE, which is what SB.enter reads for the entrance.
+    ctx.SB.trySetCur(ctx.SB.base(ctx.sess, 0).secretBaseId, ctx.sess)
 
     local StartMenu = engine("src.ui.game3.start_menu")
-    if StartMenu and type(StartMenu.close) == "function" then
-      StartMenu.close(true)
-    end
+    if callable(StartMenu, "close") then StartMenu.close(true) end
 
-    -- Warping while the menu is still tearing down is asking for trouble, so
-    -- hand the warp to the next frame when the engine offers that.
     local function warp()
-      -- The spin-in animation decides where the player ends up looking, and
-      -- warp.lua hands it savedFacing -- the direction held when the warp
-      -- began -- not the destination facing, so overriding Warp.scripted's
-      -- facing argument would be ignored.  Leaving it alone meant arriving
-      -- face-down at the base entrance and walking straight back out on the
-      -- next step.  Departing face-up is what makes the arrival face-up.
+      -- warp.lua hands the spin-in animation the facing held when the warp
+      -- began, not the destination facing, so arriving face-up means
+      -- departing face-up.  Face-down put the door one step ahead.
       local Player = engine("src.core.game3.player")
       local previous = Player and Player.facing
       if Player then Player.facing = "up" end
-      if not enterWithTeleport(SB, sess) and Player and previous then
+      if not enter(ctx) and Player and previous then
         Player.facing = previous
       end
     end
-    if type(Runtime.defer) == "function" and Runtime.defer(warp) then return end
+
+    if callable(ctx.Runtime, "defer") and ctx.Runtime.defer(warp) then return end
     warp()
   end
 
   mod.hooks:wrap("ui.start_menu.items", function(next, game, items)
     local out = next(game, items)
-    if type(out) ~= "table" then return out end
-    if not available() then return out end
+    if type(out) ~= "table" or not ready() then return out end
 
     local row = { id = "secret_base_warp", label = "BASE", onSelect = goToBase }
-
-    if mod.ui and type(mod.ui.insertBefore) == "function" then
+    if callable(mod.ui, "insertBefore") then
       return mod.ui.insertBefore(out, "SAVE", row)
     end
     out[#out + 1] = row
