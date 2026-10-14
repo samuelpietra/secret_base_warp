@@ -32,6 +32,26 @@ return function(mod)
     return t ~= nil and type(t[key]) == "function"
   end
 
+  -- Once the door shuts behind the player in the Elite Four there is no PC, no
+  -- Pokemon Center and no way back to the lobby except winning or losing; the
+  -- halls are the sealed corridors between rooms.  PokemonLeague_1F/2F and the
+  -- Ever Grande Pokemon Center are deliberately absent -- those can be walked
+  -- out of.  Standing in one of these rooms is the condition itself, which is
+  -- why this beats VAR_ELITE_4_STATE: no reset to depend on.
+  local ELITE_FOUR_MAPS = {
+    EM_EVER_GRANDE_CITY_SIDNEYS_ROOM   = true,
+    EM_EVER_GRANDE_CITY_PHOEBES_ROOM   = true,
+    EM_EVER_GRANDE_CITY_GLACIAS_ROOM   = true,
+    EM_EVER_GRANDE_CITY_DRAKES_ROOM    = true,
+    EM_EVER_GRANDE_CITY_CHAMPIONS_ROOM = true,
+    EM_EVER_GRANDE_CITY_HALL1          = true,
+    EM_EVER_GRANDE_CITY_HALL2          = true,
+    EM_EVER_GRANDE_CITY_HALL3          = true,
+    EM_EVER_GRANDE_CITY_HALL4          = true,
+    EM_EVER_GRANDE_CITY_HALL5          = true,
+    EM_EVER_GRANDE_CITY_HALL_OF_FAME   = true,
+  }
+
   -- The warp is a round trip -- SB.enter stores the departure point and the
   -- base door walks it back -- so the question is not "may the player leave
   -- this map" but "is the game in the middle of something".
@@ -58,6 +78,8 @@ return function(mod)
         and (tonumber(frontier.challengeStatus) or 0) ~= 0 then
       return true
     end
+
+    if ELITE_FOUR_MAPS[sess.map] then return true end
 
     local Hill = engine("src.core.game3.rse.trainer_hill")
     if callable(Hill, "inChallenge") then
