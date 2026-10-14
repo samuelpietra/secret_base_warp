@@ -4,10 +4,6 @@
 -- Walking back out the door returns them to where they left from, which is
 -- vanilla behaviour: the entry script records the departure point in
 -- session.dynamicWarp and SB.warpOut reads it back.
---
--- Declares "engine_internals" because runtime, rse.secret_base, warp, player,
--- field and audio are not on the Gen 3 mod facade list and are reached by
--- require.
 
 return function(mod)
   local MOD_ID = "secret_base_warp"
@@ -15,6 +11,21 @@ return function(mod)
   local MENU_ANCHOR_LABEL = "SAVE"
   local ENTRY_SCRIPT = "SecretBase_EventScript_Enter"
   local BIKE_RETURN_MAP = "bikeReturnMap"
+
+  -- Every engine module this mod reaches into, which is also what the
+  -- "engine_internals" permission in the manifest covers.  None of these are
+  -- on the Gen 3 mod facade list, so each is resolved by require.
+  local ENGINE = {
+    audio       = "src.core.game3.audio",
+    field       = "src.core.game3.field",
+    player      = "src.core.game3.player",
+    runtime     = "src.core.game3.runtime",
+    rse         = "src.core.game3.rse.init",
+    secretBase  = "src.core.game3.rse.secret_base",
+    startMenu   = "src.ui.game3.start_menu",
+    trainerHill = "src.core.game3.rse.trainer_hill",
+    warp        = "src.core.game3.warp",
+  }
 
   -- Emerald's rse_teleport_tile carries the departure sound but no spin-out,
   -- and FireRed's warpteleport spins both ways but is silent.  The kinds table
@@ -56,21 +67,34 @@ return function(mod)
     return container ~= nil and type(container[name]) == "function"
   end
 
+  -- An engine query that may be missing or may throw on a version this mod was
+  -- not written against.  Answering false in either case is what every caller
+  -- wants, so they do not each repeat the check.
+  local function callOrFalse(container, name, ...)
+    if not hasFunction(container, name) then return false end
+    local called, result = pcall(container[name], ...)
+    return called and result or false
+  end
+
+  local function currentSession()
+    local Runtime = engineModule(ENGINE.runtime)
+    if not hasFunction(Runtime, "getSession") then return nil end
+    local session = Runtime.getSession()
+    if type(session) ~= "table" then return nil end
+    return session, Runtime
+  end
+
   -- The trip is a round trip, so the question is never "may the player leave
   -- this map" but "is the game in the middle of something".
   local function isMidSequence(session)
-    local Field = engineModule("src.core.game3.field")
-    if hasFunction(Field, "isLocked") and Field.isLocked() then return true end
+    if callOrFalse(engineModule(ENGINE.field), "isLocked") then return true end
 
     -- Warp.scripted sets Warp._busy without ever checking it.
-    local Warp = engineModule("src.core.game3.warp")
-    if hasFunction(Warp, "isBusy") and Warp.isBusy() then return true end
+    if callOrFalse(engineModule(ENGINE.warp), "isBusy") then return true end
 
     -- Mr. Briney's boat and the S.S. Tidal are scripted start to finish.
-    local Rse = engineModule("src.core.game3.rse.init")
-    if hasFunction(Rse, "flag") and Rse.flag("FLAG_SYS_CRUISE_MODE", session) then
-      return true
-    end
+    local Rse = engineModule(ENGINE.rse)
+    if callOrFalse(Rse, "flag", "FLAG_SYS_CRUISE_MODE", session) then return true end
 
     -- Frontier facilities and Battle Tents cut the player off from the PC on
     -- purpose, and a Secret Base has one.  challengeStatus is 0 between runs,
@@ -83,29 +107,21 @@ return function(mod)
 
     if SEALED_ELITE_FOUR_MAPS[session.map] then return true end
 
-    local TrainerHill = engineModule("src.core.game3.rse.trainer_hill")
-    if hasFunction(TrainerHill, "inChallenge") then
-      local checked, running = pcall(TrainerHill.inChallenge, session)
-      if checked and running then return true end
-    end
-
-    return false
+    return callOrFalse(engineModule(ENGINE.trainerHill), "inChallenge", session)
   end
 
   -- Everything the warp needs, or nil when it cannot run right now.
   local function warpContext()
-    local Runtime = engineModule("src.core.game3.runtime")
-    local SecretBase = engineModule("src.core.game3.rse.secret_base")
-    if not (SecretBase and hasFunction(Runtime, "getSession")) then return nil end
+    local session, Runtime = currentSession()
+    local SecretBase = engineModule(ENGINE.secretBase)
+    if not (session and SecretBase) then return nil end
 
-    local session = Runtime.getSession()
-    if type(session) ~= "table" then return nil end
+    if not callOrFalse(SecretBase, "playerHasBase", session) then return nil end
 
-    local checked, ownsBase = pcall(SecretBase.playerHasBase, session)
-    if not (checked and ownsBase) then return nil end
-
-    -- Leaving one base for another would overwrite session.dynamicWarp, the
-    -- single slot holding the first base's way out, stranding the player.
+    -- The one engine query answered fail-closed rather than through
+    -- callOrFalse: if it throws, whether the player is already in a base is
+    -- unknown, and entering one from another overwrites session.dynamicWarp,
+    -- the single slot holding the first base's way out.
     local known, alreadyInside = pcall(SecretBase.curMapIsSecretBase, session)
     if not known or alreadyInside then return nil end
 
@@ -114,7 +130,7 @@ return function(mod)
     return {
       SecretBase = SecretBase,
       Runtime = Runtime,
-      Warp = engineModule("src.core.game3.warp"),
+      Warp = engineModule(ENGINE.warp),
       session = session,
     }
   end
@@ -142,9 +158,10 @@ return function(mod)
 
     Warp.scripted = function(warpMod, game, requestedKind, destinationMap, ...)
       cancel()
-      local known, isBase = pcall(context.SecretBase.curMapIsSecretBase,
-        context.session, destinationMap)
-      if known and isBase then requestedKind = kind end
+      if callOrFalse(context.SecretBase, "curMapIsSecretBase",
+          context.session, destinationMap) then
+        requestedKind = kind
+      end
       return vanillaScripted(warpMod, game, requestedKind, destinationMap, ...)
     end
     return cancel
@@ -157,9 +174,8 @@ return function(mod)
   local function enterOwnBase(context)
     local cancelOverride = overrideNextWarpKind(context)
 
-    if hasFunction(context.SecretBase, "startScript") then
-      local ran, started = pcall(context.SecretBase.startScript, ENTRY_SCRIPT)
-      if ran and started then return true end
+    if callOrFalse(context.SecretBase, "startScript", ENTRY_SCRIPT) then
+      return true
     end
 
     local warped, entered = pcall(context.SecretBase.enter, context.session)
@@ -172,7 +188,7 @@ return function(mod)
   -- map.lua recomputes keepBike from the destination and never writes
   -- Player.biking on the way back, so nothing else remounts the player.
   local function rememberBike(session)
-    local Player = engineModule("src.core.game3.player")
+    local Player = engineModule(ENGINE.player)
     local riding = Player ~= nil and Player.biking == true
     mod.save:set(BIKE_RETURN_MAP, riding and session.map or false)
   end
@@ -186,13 +202,11 @@ return function(mod)
     if type(returnMap) ~= "string" or type(arrivedMap) ~= "string" then return end
 
     -- Arriving in the base is the outbound leg; keep waiting for the return.
-    local Runtime = engineModule("src.core.game3.runtime")
-    local SecretBase = engineModule("src.core.game3.rse.secret_base")
-    local session = hasFunction(Runtime, "getSession") and Runtime.getSession()
-    if SecretBase and type(session) == "table" then
-      local known, inside =
-        pcall(SecretBase.curMapIsSecretBase, session, arrivedMap)
-      if known and inside then return end
+    local session = currentSession()
+    local SecretBase = engineModule(ENGINE.secretBase)
+    if session
+        and callOrFalse(SecretBase, "curMapIsSecretBase", session, arrivedMap) then
+      return
     end
 
     -- Any other map settles it: either this is the way back, or the player
@@ -200,12 +214,10 @@ return function(mod)
     forgetBike()
     if arrivedMap ~= returnMap then return end
 
-    local Player = engineModule("src.core.game3.player")
+    local Player = engineModule(ENGINE.player)
     if not Player or Player.surfing or Player.underwater then return end
     Player.biking = true
-
-    local Audio = engineModule("src.core.game3.audio")
-    if hasFunction(Audio, "bikeMusic") then pcall(Audio.bikeMusic, true, true) end
+    callOrFalse(engineModule(ENGINE.audio), "bikeMusic", true, true)
   end
 
   local function goToOwnBase()
@@ -217,14 +229,14 @@ return function(mod)
     local ownBaseId = context.SecretBase.base(context.session, 0).secretBaseId
     context.SecretBase.trySetCur(ownBaseId, context.session)
 
-    local StartMenu = engineModule("src.ui.game3.start_menu")
+    local StartMenu = engineModule(ENGINE.startMenu)
     if hasFunction(StartMenu, "close") then StartMenu.close(true) end
 
     local function depart()
       -- warp.lua hands the spin-in animation the facing held when the warp
       -- began rather than the destination facing, so arriving face-up means
       -- departing face-up.  Face-down left the player one step from the door.
-      local Player = engineModule("src.core.game3.player")
+      local Player = engineModule(ENGINE.player)
       local previousFacing = Player and Player.facing
       if Player then Player.facing = "up" end
 
