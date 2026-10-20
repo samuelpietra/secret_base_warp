@@ -74,6 +74,13 @@ gen1recomp/
 
 The mod targets Emerald only and stays inert on other games.
 
+## Updating
+
+The manifest names this repository (`github`), so gen1recomp's Mod Manager
+checks its [releases](https://github.com/samuelpietra/secret_base_warp/releases)
+and offers a newer one with an **Update** button; **Check for updates** asks
+again right away instead of waiting for the six-hour cache.
+
 ## Using it
 
 Open the Start menu. If you own a Secret Base and nothing listed under
@@ -120,10 +127,23 @@ tell which build is running. In a library, let refactors ride along to the next
 
 Keep `manifest.json`'s `version` field in step with the tag.
 
+A release players can update to is a GitHub release of that tag with the zip
+from `package.sh` attached; pushing a commit updates no one. GitHub Actions
+does both checks and the publishing:
+
+| Workflow | When | What |
+|---|---|---|
+| `ci.yml` | every push to `main` and pull request | `tests/run.sh`; every pushed commit raises the version and carries its tag |
+| `release.yml` | a pushed tag `v*` | the tests again, then a GitHub release of the tag with the zip attached and the commit message as its notes |
+
+Push commits with their tags: `git push --follow-tags`. GitHub sends no tag
+events for a push of more than three tags; release such a push by hand from
+**Actions → Release → Run workflow**, naming the newest tag.
+
 ### Packaging
 
 `./package.sh` writes the install zip of the release `manifest.json` names to
-`~/Desktop/secret_base_warp-v<version>.zip`: the files of its tag, in a
+`~/Desktop/secret_base_warp-<version>.zip`: the files of its tag, in a
 `secret_base_warp` folder, without the tests and tooling (`.gitattributes`
 marks them `export-ignore`). It stops if that version has no tag yet.
 

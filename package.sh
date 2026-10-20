@@ -1,6 +1,7 @@
 #!/bin/sh
 # Writes the install zip of the release manifest.json names: the files of tag
-# v<version>, in a folder named after the mod id, at ~/Desktop/<id>-v<version>.zip.
+# v<version>, in a folder named after the mod id, at ~/Desktop/<id>-<version>.zip,
+# the name the launcher looks for first among a GitHub release's assets.
 # Paths marked export-ignore in .gitattributes (tests, tooling) are left out.
 set -eu
 
@@ -18,7 +19,7 @@ if [ "$(git rev-parse "$TAG^{commit}")" != "$(git rev-parse HEAD)" ]; then
   echo "note: HEAD is not $TAG; the zip holds $TAG" >&2
 fi
 
-OUT="$HOME/Desktop/$ID-$TAG.zip"
+OUT="$HOME/Desktop/$ID-$VERSION.zip"
 git archive --format=zip --prefix="$ID/" -o "$OUT" "$TAG"
 echo "$OUT"
 unzip -l "$OUT" | tail -1

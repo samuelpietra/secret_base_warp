@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+    inputs:
+      ref:
+        description: The commit or tag to test
+        type: string
+        default: ""
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - run: sudo apt-get update && sudo apt-get install -y love
+      - run: tests/run.sh
+
+  versions:
+    if: github.event_name == 'push' && github.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # A new branch (before is all zeros) is checked from its first commit.
+      - run: |
+          if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            .github/scripts/check_versions.sh "${{ github.sha }}"
+          else
+            .github/scripts/check_versions.sh "${{ github.event.before }}..${{ github.sha }}"
+          fi

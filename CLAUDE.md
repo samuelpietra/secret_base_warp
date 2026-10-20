@@ -99,5 +99,10 @@ Commit only when the maintainer says so, usually after playing the build.
 - Update the README in the same commit when behaviour, requirements or
   layout change.
 - `./package.sh` writes the install zip of the tagged release to
-  `~/Desktop/secret_base_warp-v<version>.zip`, leaving out what
+  `~/Desktop/secret_base_warp-<version>.zip`, leaving out what
   `.gitattributes` marks `export-ignore` (tests and tooling).
+- Players get updates from GitHub releases (`github` in the manifest).
+  `release.yml` publishes one, zip attached, for each pushed tag; push with
+  `git push --follow-tags`. `ci.yml` runs `tests/run.sh` and fails a pushed
+  commit that does not raise the version or lacks its tag
+  (`.github/scripts/check_versions.sh`).

@@ -1,0 +1,46 @@
+name: Release
+
+# A pushed tag v<version> becomes the GitHub release players update to, with
+# the zip from package.sh attached.  GitHub sends no tag events for a push of
+# more than three tags, so such a push is released by hand: Actions → Release
+# → Run workflow, naming the tag.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The tag to release, e.g. v0.3.9
+        required: true
+
+jobs:
+  tests:
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ inputs.tag || github.ref_name }}
+
+  release:
+    needs: tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          fetch-depth: 0
+      - name: Package
+        run: |
+          [ "v$(sed -n 's/^  "version": "\(.*\)",$/\1/p' manifest.json)" = "$TAG" ] \
+            || { echo "::error::$TAG does not match manifest.json's version"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/Desktop"
+          HOME="$RUNNER_TEMP" ./package.sh | tee "$RUNNER_TEMP/package.log"
+      # The commit message is the release note, without its trailers.
+      - name: Publish
+        run: |
+          git log -1 --format=%B "$TAG" | grep -v '^Co-Authored-By:' > "$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" "$(head -1 "$RUNNER_TEMP/package.log")" \
+            --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag
