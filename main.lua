@@ -226,8 +226,11 @@ return function(mod)
 
     -- Index 0 is the player's own base.  trySetCur sets both SB._curId and
     -- VAR_CURRENT_SECRET_BASE, which the entry script reads for the entrance.
-    local ownBaseId = context.SecretBase.base(context.session, 0).secretBaseId
-    context.SecretBase.trySetCur(ownBaseId, context.session)
+    -- Its answer is ignored: it reports a missing id, and playerHasBase has
+    -- just found this one.
+    local ownBase = callOrFalse(context.SecretBase, "base", context.session, 0)
+    if type(ownBase) ~= "table" then return end
+    callOrFalse(context.SecretBase, "trySetCur", ownBase.secretBaseId, context.session)
 
     local StartMenu = engineModule(ENGINE.startMenu)
     if hasFunction(StartMenu, "close") then StartMenu.close(true) end

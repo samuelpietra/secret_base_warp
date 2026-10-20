@@ -42,7 +42,7 @@ function SB.curMapIsSecretBase(s, mapId)
   if SB.curMapThrows then error("no map data") end
   return (mapId or s.map) == BASE_MAP
 end
-function SB.base(_, index) return index == 0 and { secretBaseId = 42 } or nil end
+function SB.base(_, index) if SB.baseThrows then error("renamed internals") end return index == 0 and { secretBaseId = 42 } or nil end
 function SB.trySetCur(id) SB.cur = id end
 function SB.startScript(label) SB.scripts[#SB.scripts + 1] = label; return SB.scriptStarts end
 function SB.enter() SB.entered = SB.entered + 1; return SB.enters end
@@ -93,7 +93,7 @@ local function select() choose(); runDeferred() end
 local function fresh()
   session = { map = "EM_RUSTBORO_CITY", frontier = { challengeStatus = 0 } }
   Field.locked, Warp.busy, Hill.running, Rse.flags = false, false, false, {}
-  SB.hasBase, SB.curMapThrows, SB.scriptStarts, SB.enters, SB.scripts, SB.entered, SB.cur = true, false, true, true, {}, 0, nil
+  SB.baseThrows, SB.hasBase, SB.curMapThrows, SB.scriptStarts, SB.enters, SB.scripts, SB.entered, SB.cur = false, true, false, true, true, {}, 0, nil
   Player.biking, Player.facing, Player.surfing = false, "down", nil
   StartMenu.closed, Warp.scripted, warped, Audio.bikeMusicCalls = false, vanillaScripted, {}, 0
   for k in pairs(saved) do saved[k] = nil end
@@ -175,6 +175,11 @@ function love.load()
     fresh(); SB.scriptStarts, SB.enters, Player.biking = false, false, true
     select()
     check(Player.facing == "down" and saved.bikeReturnMap == false, "nothing warps: the facing is restored and no bike is kept")
+
+    fresh(); SB.baseThrows = true
+    select()
+    check(not StartMenu.closed and #SB.scripts == 0 and SB.entered == 0,
+      "the own base unreadable: the menu stays open and nothing warps")
 
     -- --- the bike, for the return leg
     fresh(); Player.biking = true
