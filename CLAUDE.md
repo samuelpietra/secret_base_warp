@@ -92,8 +92,10 @@ Commit only when the maintainer says so, usually after playing the build.
   signal.
 - One SemVer tag per commit, `vMAJOR.MINOR.PATCH`: every commit is a build
   that gets installed, so `refactor`, `docs`, `test`, `chore` and `ci` bump
-  the patch too (README, *Versioning*). `manifest.json`'s `version` moves with the tag, in
-  the same commit.
+  the patch too (README, *Versioning*). `manifest.json`'s `version` moves
+  with the tag, in the same commit. Tags are annotated,
+  `git tag -a vX.Y.Z -m vX.Y.Z`: `git push --follow-tags` leaves lightweight
+  tags behind, and then no release is published.
 - End every commit message with the co-author trailer:
   `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` (or the model in
   use).

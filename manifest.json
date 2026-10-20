@@ -1,7 +1,7 @@
 {
   "id": "secret_base_warp",
   "name": "Secret Base Warp",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "api": 2,
   "entry": "main.lua",
   "profile": "content",

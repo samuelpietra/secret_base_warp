@@ -136,9 +136,11 @@ does both checks and the publishing:
 | `ci.yml` | every push to `main` and pull request | `tests/run.sh`; every pushed commit raises the version and carries its tag |
 | `release.yml` | a pushed tag `v*` | the tests again, then a GitHub release of the tag with the zip attached and the commit message as its notes |
 
-Push commits with their tags: `git push --follow-tags`. GitHub sends no tag
-events for a push of more than three tags; release such a push by hand from
-**Actions → Release → Run workflow**, naming the newest tag.
+Tag each commit with an annotated tag, `git tag -a vX.Y.Z -m vX.Y.Z`, and push
+commits with their tags: `git push --follow-tags`, which sends annotated tags
+only. GitHub sends no tag events for a push of more than three tags; release
+such a push by hand from **Actions → Release → Run workflow**, naming the
+newest tag.
 
 ### Packaging
 
