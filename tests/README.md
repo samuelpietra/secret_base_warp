@@ -11,8 +11,10 @@ tests/run.sh
 None needs a ROM, so the same script runs on a gen1recomp install (macOS,
 portable) and in CI on Linux. It uses the install's newest engine payload and
 a copy of its app's LÖVE when it finds them; otherwise gen1recomp's release
-of the engine the mod was validated on, downloaded, and the system's `love`.
+of the oldest engine `manifest.json` accepts, downloaded, and the system's `love`.
 It exits non-zero when a test fails.
+Raise `ENGINE_VERSION` in `run.sh` together with `game_version` in the
+manifest.
 
 | Test | Checks | Expected |
 |---|---|---|

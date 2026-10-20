@@ -16,7 +16,7 @@ If you were riding a bike when you left, you are back on it when you return.
 | | |
 |---|---|
 | Game | Pokémon Emerald |
-| Engine | gen1recomp 0.3.0 or newer |
+| Engine | gen1recomp 0.3.31 or newer (the oldest the offline tests pass on; 0.3.30 lacks `Field.isLocked`) |
 | Mod API | 2 |
 | Permissions | `engine_internals` |
 

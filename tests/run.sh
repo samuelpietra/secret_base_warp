@@ -9,12 +9,12 @@
 #
 # The engine is the newest update payload of the install this mod sits in
 # (mods/secret_base_warp/tests -> three levels up), or else gen1recomp's
-# release of ENGINE_VERSION.  LÖVE is the system's (CI installs it with apt),
+# release of ENGINE_VERSION, the oldest manifest.json accepts.  LÖVE is the system's (CI installs it with apt),
 # or else a copy of the install's app without its game.love, which would
 # otherwise start the game instead of the test.  Exits non-zero on a failure.
 set -eu
 
-ENGINE_VERSION=0.3.85
+ENGINE_VERSION=0.3.31
 TESTS=$(cd "$(dirname "$0")" && pwd)
 MOD=$(dirname "$TESTS")
 INSTALL=$(cd "$MOD/../.." && pwd)
