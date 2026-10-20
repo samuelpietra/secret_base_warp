@@ -88,10 +88,11 @@ in-game test, naming the cases to try.
 Commit only when the maintainer says so, usually after playing the build.
 
 - [Conventional Commits](https://www.conventionalcommits.org): `feat`, `fix`,
-  `refactor`, `docs`, `chore`, with a scope when it carries signal.
+  `refactor`, `docs`, `test`, `chore`, `ci`, with a scope when it carries
+  signal.
 - One SemVer tag per commit, `vMAJOR.MINOR.PATCH`: every commit is a build
-  that gets installed, so `refactor`, `docs` and `chore` bump the patch too
-  (README, *Versioning*). `manifest.json`'s `version` moves with the tag, in
+  that gets installed, so `refactor`, `docs`, `test`, `chore` and `ci` bump
+  the patch too (README, *Versioning*). `manifest.json`'s `version` moves with the tag, in
   the same commit.
 - End every commit message with the co-author trailer:
   `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` (or the model in

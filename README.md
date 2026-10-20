@@ -103,7 +103,7 @@ fix(bike): remount the bike on the return trip
 refactor(engine-access): collapse the repeated idioms
 ```
 
-Types in use: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`.
+Types in use: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `ci`.
 
 ### Versioning
 
@@ -117,13 +117,13 @@ Types in use: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`.
 | Backward compatible bug fix | patch |
 
 **A local convention worth stating, because it departs from the spec:**
-`refactor` and `docs` also bump the patch version here. SemVer versions
-releases rather than commits, so a pure refactor normally waits for the next
-release instead of earning a version of its own. In this repository every
-commit is a build that gets installed and played, and two different `main.lua`
-files must never both claim the same version — otherwise there is no way to
-tell which build is running. In a library, let refactors ride along to the next
-`fix` or `feat` instead.
+`refactor`, `docs`, `test`, `chore` and `ci` also bump the patch version here.
+SemVer versions releases rather than commits, so a pure refactor normally waits
+for the next release instead of earning a version of its own. In this
+repository every commit is a build that gets installed and played, and two
+different `main.lua` files must never both claim the same version — otherwise
+there is no way to tell which build is running. In a library, let refactors
+ride along to the next `fix` or `feat` instead.
 
 Keep `manifest.json`'s `version` field in step with the tag.
 
