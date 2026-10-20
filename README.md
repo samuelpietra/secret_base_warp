@@ -96,7 +96,7 @@ fix(bike): remount the bike on the return trip
 refactor(engine-access): collapse the repeated idioms
 ```
 
-Types in use: `feat`, `fix`, `refactor`, `docs`, `chore`.
+Types in use: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`.
 
 ### Versioning
 
@@ -124,8 +124,13 @@ Keep `manifest.json`'s `version` field in step with the tag.
 
 `./package.sh` writes the install zip of the release `manifest.json` names to
 `~/Desktop/secret_base_warp-v<version>.zip`: the files of its tag, in a
-`secret_base_warp` folder, without the tooling (`.gitattributes` marks them
-`export-ignore`). It stops if that version has no tag yet.
+`secret_base_warp` folder, without the tests and tooling (`.gitattributes`
+marks them `export-ignore`). It stops if that version has no tag yet.
+
+### Tests
+
+`tests/run.sh` runs the offline tests (see `tests/README.md`); run it before
+every commit.
 
 ### Code
 

@@ -1,4 +1,5 @@
 # Left out of the install zip (package.sh)
+/tests export-ignore
 /CLAUDE.md export-ignore
 /package.sh export-ignore
 /.gitattributes export-ignore

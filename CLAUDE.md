@@ -77,9 +77,11 @@ cannot tell where the game ends and the mod begins.
 
 ## Before saying it is done
 
-There are no offline tests for this mod yet. Read the change against the
-README's *Eligibility* list, then hand the build over for an in-game test,
-naming the cases to try. Do not claim it works before that.
+Run `tests/run.sh` (see `tests/README.md`) and read every result; it exits
+non-zero on a failure. A fix comes with a test that fails before it and
+passes after; a new eligibility rule gets its case in `integration`, a new
+engine call its entry in `engine`'s `CALLED`. Then hand the build over for an
+in-game test, naming the cases to try.
 
 ## Releasing
 
@@ -98,4 +100,4 @@ Commit only when the maintainer says so, usually after playing the build.
   layout change.
 - `./package.sh` writes the install zip of the tagged release to
   `~/Desktop/secret_base_warp-v<version>.zip`, leaving out what
-  `.gitattributes` marks `export-ignore` (the tooling).
+  `.gitattributes` marks `export-ignore` (tests and tooling).
